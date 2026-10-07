@@ -54,6 +54,27 @@ const NIVEAU_LABEL: Record<number, string> = {
 };
 const PAS_DE_DONNEES = "#f4f4f5";
 
+/** Jour calendaire (AAAA-MM-JJ) d'aujourd'hui à Paris. */
+function aujourdhuiParis(): string {
+  return new Intl.DateTimeFormat("fr-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+/**
+ * Libellé d'une date relative à aujourd'hui (Hier / Aujourd'hui / Demain…). Le fichier de
+ * données n'est régénéré qu'une fois par jour, souvent l'après-midi : étiqueter les dates par
+ * leur position dans le fichier ("1re = aujourd'hui") afficherait hier comme aujourd'hui
+ * toute la matinée. Dates lues à midi UTC pour être insensibles aux changements d'heure.
+ */
+function libelleJour(dateIso: string, todayIso: string): string {
+  const diff = Math.round((Date.parse(`${dateIso}T12:00:00Z`) - Date.parse(`${todayIso}T12:00:00Z`)) / 86_400_000);
+  if (diff === -1) return "Hier";
+  if (diff === 0) return "Aujourd'hui";
+  if (diff === 1) return "Demain";
+  if (diff === 2) return "Après-demain";
+  const label = new Date(`${dateIso}T12:00:00Z`).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 type Tip = { x: number; y: number; nom: string; code: string; niveau: number | null; nbZones?: number };
 
 export function QualiteAirModule() {
@@ -63,6 +84,8 @@ export function QualiteAirModule() {
   const [jourIdx, setJourIdx] = useState<0 | 1>(0);
   const [polluant, setPolluant] = useState<(typeof POLLUANTS)[number]["key"]>("code_qual");
   const [tip, setTip] = useState<Tip | null>(null);
+  // Figé au montage : new Date() ne doit pas être appelé pendant le rendu (react-hooks/purity).
+  const [today] = useState(() => aujourdhuiParis());
 
   useEffect(() => {
     let cancelled = false;
@@ -131,14 +154,14 @@ export function QualiteAirModule() {
 
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex gap-1">
-          {(["Aujourd'hui", "Demain"] as const).map((label, i) => (
+          {data.jours.map((j, i) => (
             <button
-              key={label}
+              key={j}
               type="button"
               onClick={() => setJourIdx(i as 0 | 1)}
               className={`rounded border px-3 py-1.5 text-sm ${jourIdx === i ? "border-foreground bg-foreground text-background" : "border-zinc-300 dark:border-zinc-700"}`}
             >
-              {label} — {data.jours[i]}
+              {libelleJour(j, today)} — {j}
             </button>
           ))}
         </div>
@@ -171,6 +194,7 @@ export function QualiteAirModule() {
                 key={d.code}
                 d={pathDe(d)}
                 fill={fill}
+                fillRule="evenodd"
                 stroke="#52525b"
                 strokeWidth={0.5}
                 className="cursor-pointer transition-opacity hover:opacity-80"
@@ -207,6 +231,11 @@ export function QualiteAirModule() {
           Pas de données
         </span>
       </div>
+      <p className="mx-auto max-w-2xl text-center text-xs text-zinc-500">
+        Données du{" "}
+        {new Date(data.generatedAt).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" })}{" "}
+        (heure de Paris), mises à jour une fois par jour.
+      </p>
     </section>
   );
 }
