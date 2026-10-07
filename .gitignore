@@ -4,3 +4,6 @@ out
 build
 *.log
 .env*
+
+# Cache incremental TypeScript (regenere a chaque tsc)
+*.tsbuildinfo
